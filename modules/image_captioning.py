@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import os
+import torch.nn.functional as F
+from .data_loader import SpecialTokens
 
 
 class CNN(nn.Module):
@@ -15,6 +17,54 @@ class CNN(nn.Module):
         x = self.inception(x)
         x = self.fcn(x)
         return x
+
+
+class LanuageDecoder(nn.Module):
+    def __init__(self, vocabulary_size, hidden_size):
+        super().__init__()
+        self.vocabulary_size = vocabulary_size
+        self.hidden_size = hidden_size
+        self.embedding = nn.Embedding(vocabulary_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.out = nn.Linear(in_features=hidden_size, out_features=vocabulary_size)
+
+    def forward(self, input, hidden):
+        output = self.embedding(input).view(1, -1, self.hidden_size)
+        output = F.relu(output)
+        output, hidden = self.gru(output, hidden)
+        output = F.log_softmax(self.out(output[0]))
+        return output, hidden
+
+
+class ImageCaptioning(nn.Module):
+    def __init__(self, hidden_size, vocabulary_size, device, max_length, teacher_forcing_ratio):
+        super().__init__()
+        self.image_encoder = CNN(hidden_size)
+        self.language_decoder = LanuageDecoder(vocabulary_size, hidden_size)
+        self.device = device
+        self.max_length = max_length
+        self.hidden_size = hidden_size
+        self.teacher_forcing_ration = teacher_forcing_ratio
+
+    def forward(self, imgs, true_sentences):
+        bs = imgs.size(0)
+        img_fvs = self.image_encoder(imgs)
+        decoder_input = torch.tensor([SpecialTokens.SOS_token] * bs, device=self.device)
+        decoder_hidden = img_fvs.view(1, bs, self.hidden_size)
+        use_teacher_forcing = True if torch.rand(device=self.device) > 0.5 else False
+        langage_output = []
+        if use_teacher_forcing:
+            for di in range(self.max_length):
+                decoder_output, decoder_hidden = self.language_decoder(decoder_input, decoder_hidden)
+                langage_output.append(decoder_output)
+                decoder_input = true_sentences[di]
+        else:
+            for di in range(self.max_length):
+                decoder_output, decoder_hidden = self.language_decoder(decoder_input, decoder_hidden)
+                topv, topi = decoder_output.topk(2)
+                decoder_input = topi.squeeze().detach()
+                langage_output.append(decoder_output)
+        return langage_output
 
 
 def cnn_test():
