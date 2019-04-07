@@ -1,4 +1,9 @@
 from modules.data_loader import COCODatasetProducer
+import torch.utils.data as data
+from tqdm import tqdm
+from PIL import Image
+from torchvision.transforms import transforms
+import torchvision
 
 
 def dtst_test():
@@ -20,6 +25,31 @@ def dtst_test():
     print(len(test))
     print(test[0].size())
 
+    dl = data.DataLoader(dtst, batch_size=1, shuffle=False, num_workers=16)
+
+    with tqdm(total=len(dtst)) as t:
+        for i in range(len(dtst)):
+            try:
+                imgs, _, _ = dtst[i]
+            except:
+                tqdm.write('{}'.format(i))
+                tqdm.write(dtst.img_files[i])
+            # if imgs.size(0) == 1:
+            #     tqdm.write(dtst.img_files[i])
+            t.update()
+
+def img_test():
+    trans = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor()
+    ])
+    img = Image.open('./1.jpg').convert("RGB")
+    img = trans(img)
+    print(img.size())
+    torchvision.utils.save_image(img, './resized.png')
+
+
 
 if __name__ == '__main__':
-    dtst_test()
+    # dtst_test()
+    img_test()
