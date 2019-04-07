@@ -10,9 +10,9 @@ from PIL import Image
 
 
 class SpecialTokens:
-    PAD_token = 0
-    SOS_token = 1
-    EOS_toke = 2
+    # PAD_token = 0
+    SOS_token = 0
+    # EOS_toke = 2
 
 
 class COCODatasetProducer:
@@ -167,7 +167,7 @@ class COCOTrain(data.Dataset):
         return len(self.img_files)
 
     def __getitem__(self, idx):
-        img = Image.open(self.img_files[idx])
+        img = Image.open(self.img_files[idx]).convert('RGB')
         return self.transform(img), self.word_idxs[idx], self.masks[idx]
 
 
@@ -187,7 +187,7 @@ class COCOEval(data.Dataset):
         return len(self.img_files)
 
     def __getitem__(self, idx):
-        img = Image.open(self.img_files[idx])
+        img = Image.open(self.img_files[idx]).convert('RGB')
         return self.transform(img)
 
 
@@ -206,5 +206,5 @@ class Test(data.Dataset):
         return len(self.img_files)
 
     def __getitem__(self, idx):
-        img = Image.open(self.img_files[idx])
+        img = Image.open(self.img_files[idx]).convert('RGB')
         return self.transform(img)
