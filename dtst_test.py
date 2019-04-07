@@ -11,6 +11,9 @@ def dtst_test():
     print(a.size())
     print(b.size())
     print(c.size())
+    print(len(train.img_files))
+    print(train.word_idxs.size())
+    print(train.masks.size())
 
 
 if __name__ == '__main__':

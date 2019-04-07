@@ -33,18 +33,18 @@ class COCODataset(data.Dataset):
         self.train_anns_masks = os.path.join(dtst_dir, 'annotations', 'train_data.npy')
         self.vocabulary_size = vocabulary_size
         self.train_transform = transforms.Compose([
-            transforms.Resize(224),
+            transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         self.eval_transform = transforms.Compose([
-            transforms.Resize(224),
+            transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         if split == 'train':
-            self.img_fils, self.word_idxs, self.masks = self.prepare_train_data()
+            self.img_files, self.word_idxs, self.masks = self.prepare_train_data()
         elif split == 'eval':
             self.img_files = self.prepare_eval_data()
         elif split == 'test':
@@ -58,7 +58,7 @@ class COCODataset(data.Dataset):
         return len(self.img_files)
 
     def __getitem__(self, idx):
-        img = Image.open(self.img_fils[idx])
+        img = Image.open(self.img_files[idx])
         if self.split == 'train':
             img = self.train_transform(img)
             return img, self.word_idxs[idx], self.masks[idx]
@@ -123,14 +123,14 @@ class COCODataset(data.Dataset):
             return captions, img_ids, img_files
 
     def is_train_anns_masks_file_exists(self):
-        file_name = 'train_anns_masks_size_{}_length_{}.pth.tar'
-        file_path = os.path.join(self.dtst_dir, file_name)
+        file_name = 'train_anns_masks_size_{}_length_{}.pth.tar'.format(self.vocabulary_size, self.max_caption_length)
+        file_path = os.path.join(self.dtst_dir, 'annotations', file_name)
         return os.path.exists(file_path), file_path
 
     def build_train_anns_masks_file(self, captions, vocabulary):
         file_exists, file_path = self.is_train_anns_masks_file_exists()
         if file_exists:
-            data = torch.load(self.train_anns_masks)
+            data = torch.load(file_path)
             word_idxs = data['word_idxs']
             masks = data['masks']
         else:
@@ -147,8 +147,8 @@ class COCODataset(data.Dataset):
                 current_masks[:current_num_words] = 1.0
                 word_idxs.append(current_word_idxs)
                 masks.append(current_masks)
-            word_idxs = torch.cat(word_idxs)
-            masks = torch.cat(masks)
+            word_idxs = torch.stack(word_idxs)
+            masks = torch.stack(masks)
             data = {'word_idxs': word_idxs, 'masks': masks}
             torch.save(data, file_path)
         return word_idxs, masks
