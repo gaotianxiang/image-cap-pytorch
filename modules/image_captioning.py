@@ -4,12 +4,13 @@ import torchvision.models as models
 import os
 import torch.nn.functional as F
 from .data_loader import SpecialTokens
+import random
 
 
 class CNN(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, load_pretrained=False):
         super().__init__()
-        self.inception = models.inception_v3(pretrained=False)
+        self.inception = models.inception_v3(pretrained=load_pretrained)
         self.fcn = nn.Linear(in_features=self.inception.fc.out_features, out_features=hidden_size)
 
     def forward(self, imgs):
@@ -19,7 +20,7 @@ class CNN(nn.Module):
         return x
 
 
-class LanuageDecoder(nn.Module):
+class LanguageDecoder(nn.Module):
     def __init__(self, vocabulary_size, hidden_size):
         super().__init__()
         self.vocabulary_size = vocabulary_size
@@ -37,10 +38,11 @@ class LanuageDecoder(nn.Module):
 
 
 class ImageCaptioning(nn.Module):
-    def __init__(self, hidden_size, vocabulary_size, device, max_length, teacher_forcing_ratio):
+    def __init__(self, hidden_size, vocabulary_size, device, max_length, teacher_forcing_ratio,
+                 cnn_load_pretrained=False):
         super().__init__()
-        self.image_encoder = CNN(hidden_size)
-        self.language_decoder = LanuageDecoder(vocabulary_size, hidden_size)
+        self.image_encoder = CNN(hidden_size, load_pretrained=cnn_load_pretrained)
+        self.language_decoder = LanguageDecoder(vocabulary_size, hidden_size)
         self.device = device
         self.max_length = max_length
         self.hidden_size = hidden_size
@@ -51,7 +53,7 @@ class ImageCaptioning(nn.Module):
         img_fvs = self.image_encoder(imgs)
         decoder_input = torch.tensor([SpecialTokens.SOS_token] * bs, device=self.device)
         decoder_hidden = img_fvs.view(1, bs, self.hidden_size)
-        use_teacher_forcing = True if torch.rand(device=self.device) > 0.5 else False
+        use_teacher_forcing = True if random.random() > 0.5 else False
         langage_output = []
         if use_teacher_forcing:
             for di in range(self.max_length):
