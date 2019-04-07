@@ -33,7 +33,7 @@ class LanguageDecoder(nn.Module):
         output = self.embedding(input).view(1, -1, self.hidden_size)
         output = F.relu(output)
         output, hidden = self.gru(output, hidden)
-        output = F.log_softmax(self.out(output[0]))
+        output = F.log_softmax(self.out(output[0]), dim=-1)
         return output, hidden
 
 
@@ -46,14 +46,15 @@ class ImageCaptioning(nn.Module):
         self.device = device
         self.max_length = max_length
         self.hidden_size = hidden_size
-        self.teacher_forcing_ration = teacher_forcing_ratio
+        self.teacher_forcing_ratio = teacher_forcing_ratio
 
     def forward(self, imgs, true_sentences):
         bs = imgs.size(0)
+        true_sentences = true_sentences.transpose(0, 1)
         img_fvs = self.image_encoder(imgs)
         decoder_input = torch.tensor([SpecialTokens.SOS_token] * bs, device=self.device)
         decoder_hidden = img_fvs.view(1, bs, self.hidden_size)
-        use_teacher_forcing = True if random.random() > 0.5 else False
+        use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
         langage_output = []
         if use_teacher_forcing:
             for di in range(self.max_length):
