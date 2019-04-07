@@ -15,56 +15,56 @@ class SpecialTokens:
     EOS_toke = 2
 
 
-class COCODataset(data.Dataset):
-    def __init__(self, dtst_dir, max_caption_length, vocabulary_size, test_dir=None, split='train'):
+class COCODatasetProducer:
+    def __init__(self, dtst_dir, max_caption_length, vocabulary_size):
         super().__init__()
-        assert split in ['train', 'test', 'eval'], 'parameter ``split`` has to be one of train, eval, and val'
+        # assert split in ['train', 'test', 'eval'], 'parameter ``split`` has to be one of train, eval, and val'
         self.dtst_dir = dtst_dir
-        self.split = split
-        self.test_dir = test_dir
+        # self.split = split
+        # self.test_dir = test_dir
         self.max_caption_length = max_caption_length
 
         self.train_caption_file_path = os.path.join(dtst_dir, 'annotations', 'captions_train2014.json')
         self.test_caption_file_path = os.path.join(dtst_dir, 'annotations', 'captions_val2014.json')
 
-        self.vocabulary_file_name = 'vocabulary_size_{}_length_{}.csv'.format(vocabulary_size, max_caption_length)
-        self.vocabulary_file_path = os.path.join(dtst_dir, 'annotations', self.vocabulary_file_name)
-        self.train_imgid_imgfilename_caption = os.path.join(dtst_dir, 'annotations', 'anns_preprocess.csv')
-        self.train_anns_masks = os.path.join(dtst_dir, 'annotations', 'train_data.npy')
+        # self.vocabulary_file_name = 'vocabulary_size_{}_length_{}.csv'.format(vocabulary_size, max_caption_length)
+        # self.vocabulary_file_path = os.path.join(dtst_dir, 'annotations', self.vocabulary_file_name)
+        # self.train_imgid_imgfilename_caption = os.path.join(dtst_dir, 'annotations', 'anns_preprocess.csv')
+        # self.train_anns_masks = os.path.join(dtst_dir, 'annotations', 'train_data.npy')
         self.vocabulary_size = vocabulary_size
-        self.train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-        self.eval_transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-        if split == 'train':
-            self.img_files, self.word_idxs, self.masks = self.prepare_train_data()
-        elif split == 'eval':
-            self.img_files = self.prepare_eval_data()
-        elif split == 'test':
-            if self.test_dir is None:
-                raise Exception('no test dir as input')
-            self.img_files = self.prepare_test_data()
-        else:
-            raise Exception('split must be one of train, eval, and test')
+        # self.train_transform = transforms.Compose([
+        #     transforms.RandomResizedCrop(224),
+        #     transforms.RandomHorizontalFlip(),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # ])
+        # self.eval_transform = transforms.Compose([
+        #     transforms.Resize((224, 224)),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # ])
+        # if split == 'train':
+        #     self.img_files, self.word_idxs, self.masks = self.prepare_train_data()
+        # elif split == 'eval':
+        #     self.img_files = self.prepare_eval_data()
+        # elif split == 'test':
+        #     if self.test_dir is None:
+        #         raise Exception('no test dir as input')
+        #     self.img_files = self.prepare_test_data()
+        # else:
+        #     raise Exception('split must be one of train, eval, and test')
 
-    def __len__(self):
-        return len(self.img_files)
-
-    def __getitem__(self, idx):
-        img = Image.open(self.img_files[idx])
-        if self.split == 'train':
-            img = self.train_transform(img)
-            return img, self.word_idxs[idx], self.masks[idx]
-        elif self.split == 'eval':
-            img = self.eval_transform(img)
-            return img
+    # def __len__(self):
+    #     return len(self.img_files)
+    #
+    # def __getitem__(self, idx):
+    #     img = Image.open(self.img_files[idx])
+    #     if self.split == 'train':
+    #         img = self.train_transform(img)
+    #         return img, self.word_idxs[idx], self.masks[idx]
+    #     elif self.split == 'eval':
+    #         img = self.eval_transform(img)
+    #         return img
 
     def is_vocabulary_file_exists(self):
         file_name = 'vocabulary_size_{}_length_{}.csv'.format(self.vocabulary_size, self.max_caption_length)
@@ -98,7 +98,7 @@ class COCODataset(data.Dataset):
         file_exists, file_path = self.is_train_imgid_imgfile_captions_file_exists()
 
         if file_exists:
-            annotations = pd.read_csv(self.train_imgid_imgfilename_caption)
+            annotations = pd.read_csv(file_path)
             captions = annotations['caption'].values
             img_ids = annotations['image_id'].values
             img_files = annotations['image_file'].values
@@ -193,7 +193,8 @@ class COCODataset(data.Dataset):
         word_idxs, masks = self.build_train_anns_masks_file(captions, vocabulary)
         print('captions processed')
         print('number of captions = {}'.format(len(captions)))
-        return img_files, word_idxs, masks
+        coco_train_dtst = COCOTrain(img_files, word_idxs, masks)
+        return coco_train_dtst
 
         # if not os.path.exists(self.train_anns_masks):
         #     word_idxs = []
@@ -227,36 +228,93 @@ class COCODataset(data.Dataset):
                      img_ids]
 
         print('building the vocabulary')
-        if os.path.exists(self.vocabulary_file_path):
-            vocabulary = Vocabulary(self.vocabulary_size, self.vocabulary_file_path)
-        else:
-            vocabulary = self.build_vocabulary()
+        vocabulary = self.build_vocabulary()
         print('vocabulary built.')
         print('number of words = {}'.format(vocabulary.size))
-        return img_files
 
-    def prepare_test_data(self):
-        test_dir = self.test_dir
+        coco_eval_dtst = COCOEval(coco_test, img_files, vocabulary)
+        return coco_eval_dtst
+
+    def prepare_test_data(self, test_dir):
         files = os.listdir(test_dir)
         img_files = [os.path.join(test_dir, f) for f in files if
                      f.lower().endswith('.jpg') or f.lower().endswith('.jpeg')]
         img_ids = list(range(len(img_files)))
         print("Building the vocabulary...")
-        if os.path.exists(self.vocabulary_file_path):
-            vocabulary = Vocabulary(self.vocabulary_size,
-                                    self.vocabulary_file_path)
-        else:
-            vocabulary = self.build_vocabulary()
+        vocabulary = self.build_vocabulary()
         print("Vocabulary built.")
         print("Number of words = {}".format(vocabulary.size))
-        return img_files
+
+        test_dtst = Test(img_files, vocabulary)
+        return test_dtst
+
+
+class COCOTrain(data.Dataset):
+    def __init__(self, img_files, word_idxs, masks):
+        super(COCOTrain, self).__init__()
+        self.img_files = img_files
+        self.word_idxs = word_idxs
+        self.masks = masks
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    def __len__(self):
+        return len(self.img_files)
+
+    def __getitem__(self, idx):
+        img = Image.open(self.img_files[idx])
+        return self.transform(img), self.word_idxs[idx], self.masks[idx]
+
+
+class COCOEval(data.Dataset):
+    def __init__(self, eval_coco, img_files, vocabulary):
+        super(COCOEval, self).__init__()
+        self.eval_coco = eval_coco
+        self.img_files = img_files
+        self.vocabulary = vocabulary
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    def __len__(self):
+        return len(self.img_files)
+
+    def __getitem__(self, idx):
+        img = Image.open(self.img_files[idx])
+        return self.transform(img)
+
+
+class Test(data.Dataset):
+    def __init__(self, img_files, vocabulary):
+        super(Test, self).__init__()
+        self.img_files = img_files
+        self.vocabulary = vocabulary
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    def __len__(self):
+        return len(self.img_files)
+
+    def __getitem__(self, idx):
+        img = Image.open(self.img_files[idx])
+        return self.transform(img)
+
 
 
 def dtst_test():
     # train = COCODataset(dtst_dir='/playpen1/scribble/tianxian/dataset/MSCOCO2014/', max_caption_length=20,
     #                     vocabulary_size=5000, split='train')
-    eval = COCODataset(dtst_dir='/playpen1/scribble/tianxian/dataset/MSCOCO2014/', max_caption_length=20,
-                       vocabulary_size=5000, split='eval')
+    eval = COCODatasetProducer(dtst_dir='/playpen1/scribble/tianxian/dataset/MSCOCO2014/', max_caption_length=20,
+                               vocabulary_size=5000, split='eval')
 
 
 if __name__ == '__main__':
