@@ -27,16 +27,10 @@ def dtst_test():
 
     dl = data.DataLoader(dtst, batch_size=1, shuffle=False, num_workers=16)
 
-    with tqdm(total=len(dtst)) as t:
-        for i in range(len(dtst)):
-            try:
-                imgs, _, _ = dtst[i]
-            except:
-                tqdm.write('{}'.format(i))
-                tqdm.write(dtst.img_files[i])
-            # if imgs.size(0) == 1:
-            #     tqdm.write(dtst.img_files[i])
+    with tqdm(total=len(dl)) as t:
+        for _, _, _ in dl:
             t.update()
+
 
 def img_test():
     trans = transforms.Compose([
@@ -49,7 +43,6 @@ def img_test():
     torchvision.utils.save_image(img, './resized.png')
 
 
-
 if __name__ == '__main__':
-    # dtst_test()
-    img_test()
+    dtst_test()
+    # img_test()

@@ -29,6 +29,7 @@ class Direcotr:
                              drop_last=True)
         self.net.language_decoder.train()
         self.net.image_encoder.eval()
+        best_loss = 1e3
 
         for epoch in trange(epochs, desc='epochs'):
             ravg.reset()
@@ -45,7 +46,16 @@ class Direcotr:
                     ravg.update(loss.item())
                     if ite % log_every == 0:
                         tqdm.write('epoch {} ite {} loss_average {:.5f}'.format(epoch, ite, ravg()))
+                    if ite % 1000 == 0:
+                        if ravg() < best_loss:
+                            best_loss = ravg()
+                            state_dict = {
+                                'net': self.net.state_dict(),
+                                'epoch': epoch,
+                                'loss': ravg()
+                            }
+                            torch.save(state_dict, os.path.join('experiments/base_model', 'ckpts', 'best.pth.tar'))
 
                     progress_bar.set_postfix(loss_avg=ravg())
-                    progress_bar.update()
+                    progress_bar.update(batch_size)
 
