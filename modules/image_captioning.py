@@ -64,7 +64,7 @@ class ImageCaptioning(nn.Module):
         else:
             for di in range(self.max_length):
                 decoder_output, decoder_hidden = self.language_decoder(decoder_input, decoder_hidden)
-                topv, topi = decoder_output.topk(2)
+                topv, topi = decoder_output.topk(1)
                 decoder_input = topi.squeeze().detach()
                 langage_output.append(decoder_output)
         return langage_output

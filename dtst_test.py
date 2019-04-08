@@ -4,6 +4,9 @@ from tqdm import tqdm
 from PIL import Image
 from torchvision.transforms import transforms
 import torchvision
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 def dtst_test():
@@ -35,14 +38,37 @@ def dtst_test():
 def img_test():
     trans = transforms.Compose([
         transforms.Resize((224, 224)),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-    img = Image.open('./1.jpg').convert("RGB")
+
+    inv_trans = transforms.Compose([
+        transforms.Normalize(mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+                             std=[1 / 0.229, 1 / 0.224, 1 / 0.225]),
+        transforms.ToPILImage()
+    ])
+    # inv_trans = transforms.Normalize(mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+    #                                  std=[1 / 0.229, 1 / 0.224, 1 / 0.225])
+
+    img = Image.open('./4.jpg')
     img = trans(img)
     print(img.size())
-    torchvision.utils.save_image(img, './resized.png')
+
+    # torchvision.utils.save_image(img, './resized.png')
+    img = inv_trans(img)
+    # print(img)
+    img = np.array(img)
+    print(np.shape(img))
+    plt.imshow(img)
+    plt.title('test')
+    plt.axis('off')
+    plt.savefig('./test.png')
+    # img[0] = img[0] * 0.229 + 0.485
+    # img[1] = img[1] * 0.224 + 0.456
+    # img[2] = img[2] * 0.225 + 0.406
+    # torchvision.utils.save_image(img, './back.jpg')
 
 
 if __name__ == '__main__':
-    dtst_test()
-    # img_test()
+    # dtst_test()
+    img_test()
