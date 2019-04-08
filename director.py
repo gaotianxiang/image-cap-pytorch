@@ -9,10 +9,13 @@ import torch.utils.data as data
 
 class Direcotr:
     def __init__(self, gpu, pretrained_weight_dir, dtst_dir, max_caption_length, vocabulary_size,
-                 hidden_size, teacher_forcing_ratio):
+                 hidden_size, teacher_forcing_ratio, model_dir):
         os.environ['CUDA_VISIBLE_DEVICES'] = gpu
         os.environ['TORCH_MODEL_ZOO'] = pretrained_weight_dir
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model_dir = model_dir
+        self.ckpts_dir = os.path.join(model_dir, 'ckpts')
+        self.start_epoch = 0
 
         dataset_producer = COCODatasetProducer(dtst_dir, max_caption_length, vocabulary_size)
         self.train_dtst = dataset_producer.prepare_train_data()
@@ -31,7 +34,7 @@ class Direcotr:
         self.net.image_encoder.eval()
         best_loss = 1e3
 
-        for epoch in trange(epochs, desc='epochs'):
+        for epoch in trange(self.start_epoch, self.start_epoch + epochs, desc='epochs'):
             ravg.reset()
             ite = 0
             with tqdm(total=len(self.train_dtst)) as progress_bar:
@@ -59,3 +62,13 @@ class Direcotr:
                     progress_bar.set_postfix(loss_avg=ravg())
                     progress_bar.update(batch_size)
 
+    def load_ckpts(self):
+        ckpts = os.path.join(self.ckpts_dir, 'best.pth.tar')
+        if not os.path.exists(ckpts):
+            raise FileNotFoundError('there is no ckpts file in the directory {}'.format(self.ckpts_dir))
+        state_dict = torch.load(ckpts)
+        self.net.load_state_dict(state_dict['net'])
+        self.start_epoch = state_dict['epoch'] + 1
+        print('has already trained for {} epochs and the loss is {:.4f}'.format(state_dict['epoch'],
+                                                                                state_dict['loss']))
+        return state_dict['epoch'], state_dict['loss']

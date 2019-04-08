@@ -6,6 +6,7 @@ from director import Direcotr
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', default='0', type=str)
 parser.add_argument('--model_dir', default='experiments/base_model')
+parser.add_argument('--resume', '--r', action='store_true')
 args = parser.parse_args()
 
 hps_path = os.path.join(args.model_dir, 'config.json')
@@ -18,7 +19,10 @@ args.__dict__.update(hps.dict)
 def train():
     director = Direcotr(gpu=args.gpu, pretrained_weight_dir=args.pretrained_weight_dir, dtst_dir=args.dtst_dir,
                         max_caption_length=args.max_caption_length, vocabulary_size=args.vocabulary_size,
-                        hidden_size=args.hidden_size, teacher_forcing_ratio=args.teacher_forcing_ratio)
+                        hidden_size=args.hidden_size, teacher_forcing_ratio=args.teacher_forcing_ratio,
+                        model_dir=args.model_dir)
+    if args.resume:
+        director.load_ckpts()
     director.train(epochs=args.epochs, lr=args.lr, log_every=args.log_every, batch_size=args.batch_size,
                    num_workers=args.num_workers)
 
