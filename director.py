@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 
 
-class Direcotr:
+class Director:
     def __init__(self, gpu, pretrained_weight_dir, dtst_dir, max_caption_length, vocabulary_size,
                  hidden_size, teacher_forcing_ratio, model_dir):
         os.environ['CUDA_VISIBLE_DEVICES'] = gpu
