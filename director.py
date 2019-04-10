@@ -31,11 +31,14 @@ class Director:
 
     def train(self, epochs, lr, log_every, batch_size, num_workers):
         ravg = RunningAverage()
-        optimizer = optim.Adam(self.net.language_decoder.parameters(), lr=lr)
+        optimizer = optim.Adam(params=[
+            {'params': self.net.language_decoder.parameters()},
+            {'params': self.net.image_encoder.fcn.parameters()}
+        ], lr=lr)
         dl = data.DataLoader(self.train_dtst, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                              drop_last=True)
-        self.net.language_decoder.train()
-        self.net.image_encoder.eval()
+        self.net.train()
+        self.net.image_encoder.inception.eval()
         best_loss = 1e3
 
         for epoch in trange(self.start_epoch, self.start_epoch + epochs, desc='epochs'):
