@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.utils.data as data
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
+from utils.utils import set_logger, log
 
 
 class Director:
@@ -16,7 +17,6 @@ class Director:
         os.environ['TORCH_MODEL_ZOO'] = hps.pretrained_weight_dir
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model_dir = hps.model_dir
-        self.ckpts_dir = os.path.join(hps.model_dir, 'ckpts')
         self.start_epoch = 0
         self.max_caption_length = hps.max_caption_length
         self.hidden_size = hps.hidden_size
@@ -30,9 +30,11 @@ class Director:
         self.loss_function = SparseCrossEntropy()
 
     def train(self):
+        set_logger(os.path.join(self.log_dir, 'train.log'), terminal=False)
         epochs = self.hps.epochs
         lr = self.hps.lr
         log_every = self.hps.log_every
+        save_every = self.hps.save_every
         batch_size = self.hps.batch_size
         num_workers = self.hps.num_workers
         ravg = RunningAverage()
@@ -45,10 +47,13 @@ class Director:
         self.net.train()
         self.net.image_encoder.inception.eval()
         best_loss = 1e3
+        global_step = 0
+
+        if self.hps.resume:
+            _, _, global_step = self.load_ckpts()
 
         for epoch in trange(self.start_epoch, self.start_epoch + epochs, desc='epochs'):
             ravg.reset()
-            ite = 0
             with tqdm(total=len(self.train_dtst)) as progress_bar:
                 for imgs, word_idxs, masks in dl:
                     optimizer.zero_grad()
@@ -57,21 +62,22 @@ class Director:
                     loss = self.loss_function(word_idxs, generated, masks)
                     loss.backward()
                     optimizer.step()
-                    ite += 1
+                    global_step += 1
                     ravg.update(loss.item())
-                    if ite % log_every == 0:
-                        tqdm.write('epoch {} ite {} loss_average {:.5f}'.format(epoch, ite, ravg()))
-                    if ite % 1000 == 0:
+                    if global_step % log_every == 0:
+                        log('epoch {} ite {} loss_average {:05.5f}'.format(epoch, global_step, ravg()))
+                    if global_step % save_every == 0:
                         if ravg() < best_loss:
                             best_loss = ravg()
                             state_dict = {
                                 'net': self.net.state_dict(),
                                 'epoch': epoch,
-                                'loss': ravg()
+                                'loss': ravg(),
+                                'global_step': global_step
                             }
-                            torch.save(state_dict, os.path.join('experiments/base_model', 'ckpts', 'best.pth.tar'))
+                            torch.save(state_dict, os.path.join(self.ckpts_dir, 'best.pth.tar'))
 
-                    progress_bar.set_postfix(loss_avg=ravg())
+                    progress_bar.set_postfix(loss_avg='{:05.5f}'.format(ravg()))
                     progress_bar.update(batch_size)
 
     def eval(self):
@@ -126,10 +132,22 @@ class Director:
         ckpts = os.path.join(self.ckpts_dir, 'best.pth.tar')
         if not os.path.exists(ckpts):
             raise FileNotFoundError('there is no ckpts file in the directory {}'.format(self.ckpts_dir))
-        print('load ckpts from {}'.format(ckpts))
+        log('- load ckpts from {}'.format(ckpts))
         state_dict = torch.load(ckpts)
         self.net.load_state_dict(state_dict['net'])
         self.start_epoch = state_dict['epoch'] + 1
-        print('has already trained for {} epochs and the loss is {:.4f}'.format(state_dict['epoch'],
+        log('- has already trained for {} epochs and the loss is {:.4f}'.format(state_dict['epoch'],
                                                                                 state_dict['loss']))
-        return state_dict['epoch'], state_dict['loss']
+        return state_dict['epoch'], state_dict['loss'], state_dict['global_step']
+
+    @property
+    def log_dir(self):
+        log_dir = os.path.join(self.model_dir, 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        return log_dir
+
+    @property
+    def ckpts_dir(self):
+        ckpts_dir = os.path.join(self.model_dir, 'ckpts')
+        os.makedirs(ckpts_dir, exist_ok=True)
+        return ckpts_dir

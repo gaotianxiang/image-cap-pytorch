@@ -7,7 +7,7 @@ from director import Director
 def get_parameters():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', default='0', type=str)
-    parser.add_argument('--model_dir', default='experiments/base_model')
+    parser.add_argument('--model_dir', '--md', default='experiments/base_model', type=str)
     parser.add_argument('--resume', '--r', action='store_true')
     parser.add_argument('--mode', default='train', type=str)
     parser.add_argument('--test_dir', default='test', type=str)
