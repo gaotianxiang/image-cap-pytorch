@@ -10,26 +10,31 @@ import torchvision.transforms as transforms
 
 
 class Director:
-    def __init__(self, gpu, pretrained_weight_dir, dtst_dir, max_caption_length, vocabulary_size,
-                 hidden_size, teacher_forcing_ratio, model_dir):
-        os.environ['CUDA_VISIBLE_DEVICES'] = gpu
-        os.environ['TORCH_MODEL_ZOO'] = pretrained_weight_dir
+    def __init__(self, hps):
+        self.hps = hps
+        os.environ['CUDA_VISIBLE_DEVICES'] = hps.gpu
+        os.environ['TORCH_MODEL_ZOO'] = hps.pretrained_weight_dir
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model_dir = model_dir
-        self.ckpts_dir = os.path.join(model_dir, 'ckpts')
+        self.model_dir = hps.model_dir
+        self.ckpts_dir = os.path.join(hps.model_dir, 'ckpts')
         self.start_epoch = 0
-        self.max_caption_length = max_caption_length
-        self.hidden_size = hidden_size
+        self.max_caption_length = hps.max_caption_length
+        self.hidden_size = hps.hidden_size
 
-        self.dataset_producer = COCODatasetProducer(dtst_dir, max_caption_length, vocabulary_size)
+        self.dataset_producer = COCODatasetProducer(hps.dtst_dir, hps.max_caption_length, hps.vocabulary_size)
         self.train_dtst = self.dataset_producer.prepare_train_data()
         self.eval_dtst = self.dataset_producer.prepare_eval_data()
-        self.net = ImageCaptioning(device=self.device, hidden_size=hidden_size, max_length=max_caption_length,
-                                   teacher_forcing_ratio=teacher_forcing_ratio, vocabulary_size=vocabulary_size,
+        self.net = ImageCaptioning(device=self.device, hidden_size=hps.hidden_size, max_length=hps.max_caption_length,
+                                   teacher_forcing_ratio=hps.teacher_forcing_ratio, vocabulary_size=hps.vocabulary_size,
                                    cnn_load_pretrained=True).to(self.device)
         self.loss_function = SparseCrossEntropy()
 
-    def train(self, epochs, lr, log_every, batch_size, num_workers):
+    def train(self):
+        epochs = self.hps.epochs
+        lr = self.hps.lr
+        log_every = self.hps.log_every
+        batch_size = self.hps.batch_size
+        num_workers = self.hps.num_workers
         ravg = RunningAverage()
         optimizer = optim.Adam(params=[
             {'params': self.net.language_decoder.parameters()},
@@ -69,7 +74,11 @@ class Director:
                     progress_bar.set_postfix(loss_avg=ravg())
                     progress_bar.update(batch_size)
 
-    def test(self, test_dir):
+    def eval(self):
+        raise NotImplementedError
+
+    def test(self):
+        test_dir = self.hps.test_dir
         test_dir = os.path.join(self.model_dir, test_dir)
         if not os.path.exists(test_dir):
             raise FileNotFoundError('there are no such directory {}'.format(test_dir))
