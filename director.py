@@ -8,6 +8,8 @@ import torch.utils.data as data
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from utils.utils import set_logger, log
+import json
+from utils.coco.pycocoevalcap.eval import COCOEvalCap
 
 
 class Director:
@@ -81,7 +83,44 @@ class Director:
                     progress_bar.update(batch_size)
 
     def eval(self):
-        raise NotImplementedError
+        set_logger(os.path.join(self.log_dir, 'eval.log'), terminal=False)
+        log('- evaluating the model on coco dataset')
+        eval_dl = data.DataLoader(self.eval_dtst, batch_size=1)
+        eval_coco = self.eval_dtst.eval_coco
+        vocabulary = self.eval_dtst.vocabulary
+        results = []
+
+        self.load_ckpts()
+        self.net.eval()
+        with torch.no_grad():
+            with tqdm(total=len(eval_dl)) as progress_bar:
+                for id, img in eval_dl:
+                    img = img.to(self.device)
+                    fvs = self.net.image_encoder(img)
+                    sentence = []
+                    decoder_input = torch.tensor([0] * 1, dtype=torch.long, device=self.device)
+                    decoder_hidden = fvs.view(1, 1, self.hidden_size)
+
+                    for _ in range(self.max_caption_length):
+                        decoder_output, decoder_hidden = self.net.language_decoder(decoder_input, decoder_hidden)
+                        topv, topi = decoder_output.topk(1)
+                        if vocabulary.words[topi.item()] == '.':
+                            break
+                        else:
+                            sentence.append(topi.item())
+                            decoder_input = topi.detach()
+                    caption = vocabulary.get_sentence(sentence)
+                    results.append({'image_id': int(id),
+                                    'caption': caption})
+                    progress_bar.update()
+        with open(os.path.join(self.eval_dir, 'eval_caption.json'), 'w') as f:
+            json.dump(results, f)
+
+        # Evaluate these captions
+        eval_result_coco = eval_coco.loadRes(os.path.join(self.eval_dir, 'eval_caption.json'))
+        scorer = COCOEvalCap(eval_coco, eval_result_coco)
+        scorer.evaluate()
+        log("- Evaluation complete.")
 
     def test(self):
         test_dir = self.hps.test_dir
@@ -138,7 +177,7 @@ class Director:
         self.start_epoch = state_dict['epoch'] + 1
         log('- has already trained for {} epochs and the loss is {:.4f}'.format(state_dict['epoch'],
                                                                                 state_dict['loss']))
-        return state_dict['epoch'], state_dict['loss'], state_dict['global_step']
+        return state_dict['epoch'], state_dict['loss']
 
     @property
     def log_dir(self):
@@ -151,3 +190,9 @@ class Director:
         ckpts_dir = os.path.join(self.model_dir, 'ckpts')
         os.makedirs(ckpts_dir, exist_ok=True)
         return ckpts_dir
+
+    @property
+    def eval_dir(self):
+        eval_dir = os.path.join(self.model_dir, 'eval')
+        os.makedirs(eval_dir, exist_ok=True)
+        return eval_dir

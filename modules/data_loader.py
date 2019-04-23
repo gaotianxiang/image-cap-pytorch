@@ -7,6 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 from torchvision.transforms import transforms
 from PIL import Image
+from utils.utils import log
 
 
 class SpecialTokens:
@@ -117,8 +118,8 @@ class COCODatasetProducer:
         vocabulary = self.build_vocabulary()
         captions, img_ids, img_files = self.build_train_imgid_imgfile_captions_file()
         word_idxs, masks = self.build_train_anns_masks_file(captions, vocabulary)
-        print('captions processed')
-        print('number of captions = {}'.format(len(captions)))
+        log('- captions processed')
+        log('- number of captions = {}'.format(len(captions)))
         coco_train_dtst = COCOTrain(img_files, word_idxs, masks)
         return coco_train_dtst
 
@@ -128,12 +129,12 @@ class COCODatasetProducer:
         img_files = [os.path.join(self.dtst_dir, 'val2014', coco_test.imgs[image_id]['file_name']) for image_id in
                      img_ids]
 
-        print('building the vocabulary')
+        log('- building the vocabulary')
         vocabulary = self.build_vocabulary()
-        print('vocabulary built.')
-        print('number of words = {}'.format(vocabulary.size))
+        log('- vocabulary built.')
+        log('- number of words = {}'.format(vocabulary.size))
 
-        coco_eval_dtst = COCOEval(coco_test, img_files, vocabulary)
+        coco_eval_dtst = COCOEval(coco_test, img_ids, img_files, vocabulary)
         return coco_eval_dtst
 
     def prepare_test_data(self, test_dir):
@@ -172,9 +173,10 @@ class COCOTrain(data.Dataset):
 
 
 class COCOEval(data.Dataset):
-    def __init__(self, eval_coco, img_files, vocabulary):
+    def __init__(self, eval_coco, img_files, img_ids, vocabulary):
         super(COCOEval, self).__init__()
         self.eval_coco = eval_coco
+        self.img_ids = img_ids
         self.img_files = img_files
         self.vocabulary = vocabulary
         self.transform = transforms.Compose([
@@ -188,7 +190,7 @@ class COCOEval(data.Dataset):
 
     def __getitem__(self, idx):
         img = Image.open(self.img_files[idx]).convert('RGB')
-        return self.transform(img)
+        return self.img_ids[idx], self.transform(img)
 
 
 class Test(data.Dataset):
