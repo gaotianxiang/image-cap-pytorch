@@ -4,10 +4,10 @@ import torch.nn.functional as F
 
 
 class CNN(nn.Module):
-    def __init__(self, hps, load_pretrained=False):
+    def __init__(self, hps):
         super().__init__()
         self.hps = hps
-        self.inception = models.inception_v3(pretrained=load_pretrained)
+        self.inception = models.inception_v3(pretrained=True)
         self.features = nn.Sequential(*list(self.inception.children())[0:-1])
         self.dropout = nn.Dropout()
 
