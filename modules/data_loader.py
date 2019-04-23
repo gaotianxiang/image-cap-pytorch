@@ -128,7 +128,6 @@ class COCODatasetProducer:
         img_ids = list(coco_test.imgs.keys())
         img_files = [os.path.join(self.dtst_dir, 'val2014', coco_test.imgs[image_id]['file_name']) for image_id in
                      img_ids]
-
         log('- building the vocabulary')
         vocabulary = self.build_vocabulary()
         log('- vocabulary built.')
@@ -173,7 +172,7 @@ class COCOTrain(data.Dataset):
 
 
 class COCOEval(data.Dataset):
-    def __init__(self, eval_coco, img_files, img_ids, vocabulary):
+    def __init__(self, eval_coco, img_ids, img_files, vocabulary):
         super(COCOEval, self).__init__()
         self.eval_coco = eval_coco
         self.img_ids = img_ids
