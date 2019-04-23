@@ -24,8 +24,8 @@ class Director:
         self.hidden_size = hps.hidden_size
 
         self.dataset_producer = COCODatasetProducer(hps.dtst_dir, hps.max_caption_length, hps.vocabulary_size)
-        self.train_dtst = self.dataset_producer.prepare_train_data()
-        self.eval_dtst = self.dataset_producer.prepare_eval_data()
+        # self.train_dtst = self.dataset_producer.prepare_train_data()
+        # self.eval_dtst = self.dataset_producer.prepare_eval_data()
         self.net = ImageCaptioning(device=self.device, hidden_size=hps.hidden_size, max_length=hps.max_caption_length,
                                    teacher_forcing_ratio=hps.teacher_forcing_ratio, vocabulary_size=hps.vocabulary_size,
                                    cnn_load_pretrained=True).to(self.device)
@@ -39,12 +39,13 @@ class Director:
         save_every = self.hps.save_every
         batch_size = self.hps.batch_size
         num_workers = self.hps.num_workers
+        train_dtst = self.dataset_producer.prepare_train_data()
         ravg = RunningAverage()
         optimizer = optim.Adam(params=[
             {'params': self.net.language_decoder.parameters()},
             {'params': self.net.image_encoder.fcn.parameters()}
         ], lr=lr)
-        dl = data.DataLoader(self.train_dtst, batch_size=batch_size, shuffle=True, num_workers=num_workers,
+        dl = data.DataLoader(train_dtst, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                              drop_last=True)
         self.net.train()
         self.net.image_encoder.inception.eval()
@@ -56,7 +57,7 @@ class Director:
 
         for epoch in trange(self.start_epoch, self.start_epoch + epochs, desc='epochs'):
             ravg.reset()
-            with tqdm(total=len(self.train_dtst)) as progress_bar:
+            with tqdm(total=len(train_dtst)) as progress_bar:
                 for imgs, word_idxs, masks in dl:
                     optimizer.zero_grad()
                     imgs, word_idxs, masks = imgs.to(self.device), word_idxs.to(self.device), masks.to(self.device)
@@ -85,12 +86,23 @@ class Director:
     def eval(self):
         set_logger(os.path.join(self.log_dir, 'eval.log'), terminal=False)
         log('- evaluating the model on coco dataset')
-        eval_dl = data.DataLoader(self.eval_dtst, batch_size=1)
-        eval_coco = self.eval_dtst.eval_coco
-        vocabulary = self.eval_dtst.vocabulary
+        eval_dtst = self.dataset_producer.prepare_eval_data()
+        eval_dl = data.DataLoader(eval_dtst, batch_size=1)
+        eval_coco = eval_dtst.eval_coco
+        vocabulary = eval_dtst.vocabulary
         results = []
 
+        # _, _, global_step = self.load_ckpts()
         self.load_ckpts()
+        caption_path = os.path.join(self.eval_dir, 'eval_caption.json')
+        if os.path.exists(caption_path):
+            log('- already generate captions')
+            eval_result_coco = eval_coco.loadRes(caption_path)
+            scorer = COCOEvalCap(eval_coco, eval_result_coco)
+            scorer.evaluate()
+            log("- Evaluation complete.")
+            log('--------------------------------------')
+            return
         self.net.eval()
         with torch.no_grad():
             with tqdm(total=len(eval_dl)) as progress_bar:
@@ -113,14 +125,15 @@ class Director:
                     results.append({'image_id': int(id),
                                     'caption': caption})
                     progress_bar.update()
-        with open(os.path.join(self.eval_dir, 'eval_caption.json'), 'w') as f:
+        with open(caption_path, 'w') as f:
             json.dump(results, f)
 
-        # Evaluate these captions
-        eval_result_coco = eval_coco.loadRes(os.path.join(self.eval_dir, 'eval_caption.json'))
+        # # Evaluate these captions
+        eval_result_coco = eval_coco.loadRes(caption_path)
         scorer = COCOEvalCap(eval_coco, eval_result_coco)
         scorer.evaluate()
         log("- Evaluation complete.")
+        log('--------------------------------------')
 
     def test(self):
         test_dir = self.hps.test_dir
@@ -175,9 +188,9 @@ class Director:
         state_dict = torch.load(ckpts)
         self.net.load_state_dict(state_dict['net'])
         self.start_epoch = state_dict['epoch'] + 1
-        log('- has already trained for {} epochs and the loss is {:.4f}'.format(state_dict['epoch'],
-                                                                                state_dict['loss']))
-        return state_dict['epoch'], state_dict['loss']
+        log('- already trained for {} epochs and the loss is {:.4f}'.format(state_dict['epoch'],
+                                                                            state_dict['loss']))
+        return state_dict['epoch'], state_dict['loss']  # , state_dict['global_step']
 
     @property
     def log_dir(self):

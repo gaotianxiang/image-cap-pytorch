@@ -7,6 +7,7 @@ import torchvision
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from utils.utils import set_logger, log
 
 
 def dtst_test():
@@ -69,6 +70,14 @@ def img_test():
     # torchvision.utils.save_image(img, './back.jpg')
 
 
+def log_test():
+    set_logger('./log.test', terminal=False)
+    log('- test')
+    set_logger('./log.test', terminal=False)
+    log(' in file test')
+
+
 if __name__ == '__main__':
     # dtst_test()
-    img_test()
+    # img_test()
+    log_test()
