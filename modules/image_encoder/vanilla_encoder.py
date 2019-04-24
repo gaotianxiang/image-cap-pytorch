@@ -1,13 +1,12 @@
 import torch.nn as nn
-import torch.nn.functional as F
-from .inception import inception_v3
+from .vgg import vgg16
 
 
 class CNN(nn.Module):
     def __init__(self, hps):
         super().__init__()
         self.hps = hps
-        self.inception = inception_v3(pretrained=True, no_fc=True, attention=False)
+        self.vgg = vgg16(pretrained=True, attention=False)
 
     def forward(self, imgs):
         """
@@ -19,5 +18,5 @@ class CNN(nn.Module):
             x: batch of feature vectors N * 2048
         """
         x = imgs
-        x = self.inception(x)
+        x = self.vgg(x)
         return x

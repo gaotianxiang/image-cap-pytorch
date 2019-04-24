@@ -15,7 +15,11 @@ class ImageCaptioning(nn.Module):
         self.max_length = hps.max_caption_length
         self.hidden_size = hps.hidden_size
         self.teacher_forcing_ratio = hps.teacher_forcing_ratio
-        self.img_fvs_to_hs = nn.Linear(in_features=2048, out_features=self.hidden_size)
+        self.img_fvs_to_hs = nn.Sequential(
+            nn.Linear(in_features=1000, out_features=self.hidden_size),
+            nn.ReLU(True),
+            nn.Dropout()
+        )
 
     def forward(self, imgs, true_sentences):
         bs = imgs.size(0)
