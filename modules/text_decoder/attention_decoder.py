@@ -34,11 +34,10 @@ class Attention(nn.Module):
         self.attn_combine = nn.Linear(hidden_size * 2, hidden_size)
 
     def forward(self, input_embedding, prev_hidden, context):
-        attn_weights = F.softmax(self.attn(torch.cat((input_embedding[0], prev_hidden[0]), dim=1)))
+        attn_weights = F.softmax(self.attn(torch.cat((input_embedding[0], prev_hidden[0]), dim=1)), dim=1)
         attn_applied = torch.bmm(attn_weights.unsqueeze(1),
                                  context).squeeze(1)
         input_ctx_combine = torch.cat((input_embedding[0], attn_applied), dim=1)
         output = self.attn_combine(input_ctx_combine).unsqueeze(0)
         output = F.relu(output)
         return output
-

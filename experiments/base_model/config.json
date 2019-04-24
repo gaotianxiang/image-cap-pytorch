@@ -11,5 +11,6 @@
   "save_every": 1000,
   "batch_size": 64,
   "num_workers": 16,
-  "img_encoder": "vanilla"
+  "img_encoder": "vanilla",
+  "language_decoder": "vanilla"
 }

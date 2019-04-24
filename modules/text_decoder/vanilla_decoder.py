@@ -3,13 +3,14 @@ import torch.nn.functional as F
 
 
 class LanguageDecoder(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size):
+    def __init__(self, hps):
         super().__init__()
-        self.vocabulary_size = vocabulary_size
-        self.hidden_size = hidden_size
-        self.embedding = nn.Embedding(vocabulary_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
-        self.out = nn.Linear(in_features=hidden_size, out_features=vocabulary_size)
+        self.hps = hps
+        self.vocabulary_size = hps.vocabulary_size
+        self.hidden_size = hps.hidden_size
+        self.embedding = nn.Embedding(hps.vocabulary_size, hps.hidden_size)
+        self.gru = nn.GRU(hps.hidden_size, hps.hidden_size)
+        self.out = nn.Linear(in_features=hps.hidden_size, out_features=hps.vocabulary_size)
 
     def forward(self, input, hidden):
         output = self.embedding(input).view(1, -1, self.hidden_size)
