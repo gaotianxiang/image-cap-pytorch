@@ -18,17 +18,15 @@ class Director:
         os.environ['CUDA_VISIBLE_DEVICES'] = hps.gpu
         os.environ['TORCH_MODEL_ZOO'] = hps.pretrained_weight_dir
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        hps.device = self.device
         self.model_dir = hps.model_dir
         self.start_epoch = 0
         self.max_caption_length = hps.max_caption_length
         self.hidden_size = hps.hidden_size
 
         self.dataset_producer = COCODatasetProducer(hps.dtst_dir, hps.max_caption_length, hps.vocabulary_size)
-        # self.train_dtst = self.dataset_producer.prepare_train_data()
-        # self.eval_dtst = self.dataset_producer.prepare_eval_data()
-        self.net = ImageCaptioning(device=self.device, hidden_size=hps.hidden_size, max_length=hps.max_caption_length,
-                                   teacher_forcing_ratio=hps.teacher_forcing_ratio, vocabulary_size=hps.vocabulary_size,
-                                   cnn_load_pretrained=True).to(self.device)
+
+        self.net = ImageCaptioning(hps).to(self.device)
         self.loss_function = SparseCrossEntropy()
 
     def train(self):
@@ -43,12 +41,13 @@ class Director:
         ravg = RunningAverage()
         optimizer = optim.Adam(params=[
             {'params': self.net.language_decoder.parameters()},
-            {'params': self.net.image_encoder.fcn.parameters()}
+            {'params': self.net.img_fvs_to_hs.parameters()}
         ], lr=lr)
+        schedular = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.3, threshold=1e-2, patience=3)
         dl = data.DataLoader(train_dtst, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                              drop_last=True)
         self.net.train()
-        self.net.image_encoder.inception.eval()
+        self.net.image_encoder.eval()
         best_loss = 1e3
         global_step = 0
 
@@ -69,19 +68,19 @@ class Director:
                     ravg.update(loss.item())
                     if global_step % log_every == 0:
                         log('epoch {} ite {} loss_average {:05.5f}'.format(epoch, global_step, ravg()))
-                    if global_step % save_every == 0:
-                        if ravg() < best_loss:
-                            best_loss = ravg()
-                            state_dict = {
-                                'net': self.net.state_dict(),
-                                'epoch': epoch,
-                                'loss': ravg(),
-                                'global_step': global_step
-                            }
-                            torch.save(state_dict, os.path.join(self.ckpts_dir, 'best.pth.tar'))
 
                     progress_bar.set_postfix(loss_avg='{:05.5f}'.format(ravg()))
                     progress_bar.update(batch_size)
+            if ravg() < best_loss:
+                best_loss = ravg()
+                state_dict = {
+                    'net': self.net.state_dict(),
+                    'epoch': epoch,
+                    'loss': ravg(),
+                    'global_step': global_step
+                }
+                torch.save(state_dict, os.path.join(self.ckpts_dir, 'best.pth.tar'))
+            schedular.step(ravg())
 
     def eval(self):
         set_logger(os.path.join(self.log_dir, 'eval.log'), terminal=False)
@@ -190,7 +189,7 @@ class Director:
         self.start_epoch = state_dict['epoch'] + 1
         log('- already trained for {} epochs and the loss is {:.4f}'.format(state_dict['epoch'],
                                                                             state_dict['loss']))
-        return state_dict['epoch'], state_dict['loss']  # , state_dict['global_step']
+        return state_dict['epoch'], state_dict['loss'], state_dict['global_step']
 
     @property
     def log_dir(self):
