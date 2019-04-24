@@ -35,7 +35,7 @@ class COCODatasetProducer:
     def build_vocabulary(self):
         file_exists, file_path = self.is_vocabulary_file_exists()
         if file_exists:
-            print('vocabulary has been built, now loading it...')
+            log('vocabulary has been built, now loading it...')
             vocabulary = Vocabulary(self.vocabulary_size)
             vocabulary.load(file_path)
             return vocabulary
@@ -43,11 +43,11 @@ class COCODatasetProducer:
             coco = COCO(self.train_caption_file_path)
             coco.filter_by_cap_len(self.max_caption_length)
 
-            print('building the vocabulary...')
+            log('building the vocabulary...')
             vocabulary = Vocabulary(self.vocabulary_size)
             vocabulary.build(coco.all_captions())
             vocabulary.save(file_path)
-            print('vocabulary built.')
+            log('vocabulary built.')
             return vocabulary
 
     def is_train_imgid_imgfile_captions_file_exists(self):
@@ -67,11 +67,11 @@ class COCODatasetProducer:
         else:
             coco_train = COCO(self.train_caption_file_path)
             coco_train.filter_by_cap_len(self.max_caption_length)
-            print('loading vocabulary...')
+            log('loading vocabulary...')
             vocabulary = self.build_vocabulary()
             coco_train.filter_by_words(set(vocabulary.words))
 
-            print('processing the captions...')
+            log('processing the captions...')
             captions = [coco_train.anns[ann_id]['caption'] for ann_id in coco_train.anns]
             img_ids = [coco_train.anns[ann_id]['image_id'] for ann_id in coco_train.anns]
             img_files = [os.path.join(self.dtst_dir, 'train2014', coco_train.imgs[image_id]['file_name'])
@@ -80,7 +80,7 @@ class COCODatasetProducer:
                                         'image_file': img_files,
                                         'caption': captions})
             annotations.to_csv(file_path)
-            print('annotations img_ids, img_files, and captions file built.')
+            log('annotations img_ids, img_files, and captions file built.')
             return captions, img_ids, img_files
 
     def is_train_anns_masks_file_exists(self):
@@ -141,10 +141,10 @@ class COCODatasetProducer:
         img_files = [os.path.join(test_dir, f) for f in files if
                      f.lower().endswith('.jpg') or f.lower().endswith('.jpeg')]
         img_ids = list(range(len(img_files)))
-        print("Building the vocabulary...")
+        log("Building the vocabulary...")
         vocabulary = self.build_vocabulary()
-        print("Vocabulary built.")
-        print("Number of words = {}".format(vocabulary.size))
+        log("Vocabulary built.")
+        log("Number of words = {}".format(vocabulary.size))
 
         test_dtst = Test(img_files, vocabulary)
         return test_dtst
