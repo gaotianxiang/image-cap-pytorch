@@ -34,9 +34,10 @@ def inception_v3(pretrained=False, **kwargs):
 
 class Inception3(nn.Module):
 
-    def __init__(self, num_classes=1000, aux_logits=True, transform_input=False, fc=False):
+    def __init__(self, num_classes=1000, aux_logits=True, transform_input=False, no_fc=False, attention=False):
         super(Inception3, self).__init__()
-        self.whether_fc = fc
+        self.no_fc = no_fc
+        self.attention = attention
         self.aux_logits = aux_logits
         self.transform_input = transform_input
         self.Conv2d_1a_3x3 = BasicConv2d(3, 32, kernel_size=3, stride=2)
@@ -117,6 +118,8 @@ class Inception3(nn.Module):
         # N x 2048 x 8 x 8
         x = self.Mixed_7c(x)
         # N x 2048 x 8 x 8
+        if self.attention:
+            return x
         # Adaptive average pooling
         x = F.adaptive_avg_pool2d(x, (1, 1))
         # N x 2048 x 1 x 1
@@ -124,8 +127,9 @@ class Inception3(nn.Module):
         # N x 2048 x 1 x 1
         x = x.view(x.size(0), -1)
         # N x 2048
-        if self.whether_fc:
-            x = self.fc(x)
+        if self.no_fc:
+            return x
+        x = self.fc(x)
         # N x 1000 (num_classes)
         if self.training and self.aux_logits:
             return x, aux

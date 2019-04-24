@@ -7,9 +7,7 @@ class CNN(nn.Module):
     def __init__(self, hps):
         super().__init__()
         self.hps = hps
-        self.inception = inception_v3(pretrained=True, fc=False)
-        # self.features = nn.Sequential(*list(self.inception.children())[0:-1])
-        # self.dropout = nn.Dropout()
+        self.inception = inception_v3(pretrained=True, no_fc=True, attention=False)
 
     def forward(self, imgs):
         """
