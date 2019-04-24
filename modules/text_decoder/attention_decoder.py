@@ -14,7 +14,7 @@ class LanguageDecoder(nn.Module):
         self.out = nn.Linear(in_features=hps.hidden_size, out_features=hps.vocabulary_size)
         self.dropout = nn.Dropout(p=hps.dropout_rate)
 
-        self.attn = Attention(256, hps.hidden_size)
+        self.attn = AttentionSim(int(2048 * 8 * 8 / hps.hidden_size), hps.hidden_size)
 
     def forward(self, input, hidden, context):
         input_embedding = self.embedding(input).view(1, -1, self.hidden_size)
@@ -35,6 +35,24 @@ class Attention(nn.Module):
 
     def forward(self, input_embedding, prev_hidden, context):
         attn_weights = F.softmax(self.attn(torch.cat((input_embedding[0], prev_hidden[0]), dim=1)), dim=1)
+        attn_applied = torch.bmm(attn_weights.unsqueeze(1),
+                                 context).squeeze(1)
+        input_ctx_combine = torch.cat((input_embedding[0], attn_applied), dim=1)
+        output = self.attn_combine(input_ctx_combine).unsqueeze(0)
+        output = F.relu(output)
+        return output
+
+
+class AttentionSim(nn.Module):
+    def __init__(self, num_ctx_vec, hidden_size):
+        super(AttentionSim, self).__init__()
+        self.num_ctx_vec = num_ctx_vec
+        self.hidden_size = hidden_size
+        self.attn = nn.Linear(hidden_size, num_ctx_vec)
+        self.attn_combine = nn.Linear(hidden_size * 2, hidden_size)
+
+    def forward(self, input_embedding, prev_hidden, context):
+        attn_weights = F.softmax(self.attn(prev_hidden[0]), dim=1)
         attn_applied = torch.bmm(attn_weights.unsqueeze(1),
                                  context).squeeze(1)
         input_ctx_combine = torch.cat((input_embedding[0], attn_applied), dim=1)

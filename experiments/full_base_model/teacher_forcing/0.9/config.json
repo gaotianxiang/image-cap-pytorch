@@ -1,0 +1,16 @@
+{
+  "pretrained_weight_dir": "./modules/cnn_pretrained_weights",
+  "dtst_dir": "/playpen1/scribble/tianxian/dataset/MSCOCO2014/",
+  "max_caption_length": 20,
+  "vocabulary_size": 5000,
+  "hidden_size": 512,
+  "teacher_forcing_ratio": 0.9,
+  "epochs": 100,
+  "lr": 1e-3,
+  "log_every": 20,
+  "save_every": 1000,
+  "batch_size": 64,
+  "num_workers": 16,
+  "img_encoder": "vanilla",
+  "language_decoder": "vanilla"
+}
