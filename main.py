@@ -11,16 +11,18 @@ def get_parameters():
     parser.add_argument('--resume', '--r', action='store_true')
     parser.add_argument('--mode', default='train', type=str)
     parser.add_argument('--test_dir', default='test', type=str)
+    parser.add_argument('--beam_size', '--bs', default=3, type=int)
     args = parser.parse_args()
 
     hps_path = os.path.join(args.model_dir, 'config.json')
     if not os.path.exists(hps_path):
         raise FileNotFoundError('there is no config json file')
     hps = Params(hps_path)
-    args.__dict__.update(hps.dict)
-    if args.mode != 'train':
-        args.batch_size = 1
-    return args
+    hps.dict.update(args.__dict__)
+    # args.__dict__.update(hps.dict)
+    if hps.mode != 'train':
+        hps.batch_size = 1
+    return hps
 
 
 def main():
