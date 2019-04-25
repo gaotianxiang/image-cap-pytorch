@@ -12,7 +12,7 @@ class LanguageDecoder(nn.Module):
         self.gru = nn.GRU(hps.hidden_size, hps.hidden_size)
         self.out = nn.Linear(in_features=hps.hidden_size, out_features=hps.vocabulary_size)
 
-    def forward(self, input, hidden):
+    def forward(self, input, hidden, context):
         output = self.embedding(input).view(1, -1, self.hidden_size)
         output = F.relu(output)
         output, hidden = self.gru(output, hidden)

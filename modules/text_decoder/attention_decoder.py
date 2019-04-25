@@ -14,7 +14,7 @@ class LanguageDecoder(nn.Module):
         self.out = nn.Linear(in_features=hps.hidden_size, out_features=hps.vocabulary_size)
         self.dropout = nn.Dropout(p=hps.dropout_rate)
 
-        self.attn = AttentionSim(int(2048 * 8 * 8 / hps.hidden_size), hps.hidden_size)
+        self.attn = AttentionSim(196, hps.hidden_size)
 
     def forward(self, input, hidden, context):
         input_embedding = self.embedding(input).view(1, -1, self.hidden_size)
