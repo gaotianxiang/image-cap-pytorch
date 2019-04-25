@@ -1,8 +1,20 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import random
 from modules.image_encoder.get_img_encoder import get_img_encoder
 from modules.text_decoder.get_text_decoder import get_language_decoder
+
+
+class MeanReshape(nn.Module):
+    def __init__(self, *size):
+        super(MeanReshape, self).__init__()
+        self.size = size
+
+    def forward(self, x):
+        x = x.mean(1)
+        x = x.view(*self.size)
+        return x
 
 
 class ImageCaptioning(nn.Module):
@@ -15,6 +27,9 @@ class ImageCaptioning(nn.Module):
         self.max_length = hps.max_caption_length
         self.hidden_size = hps.hidden_size
         self.teacher_forcing_ratio = hps.teacher_forcing_ratio
+        self.img_fvs_to_hs = nn.Sequential(
+            MeanReshape(1, self.hps.batch_size, self.hidden_size)
+        )
 
     def forward(self, imgs, true_sentences):
         bs = imgs.size(0)
@@ -23,7 +38,8 @@ class ImageCaptioning(nn.Module):
         # print(img_fvs.size())
         # img_fvs = self.img_fvs_to_hs(img_fvs)
         decoder_input = torch.tensor([0] * bs, device=self.device)
-        decoder_hidden = img_fvs.mean(1).view(1, bs, self.hidden_size)
+        # decoder_hidden = img_fvs.mean(1).view(1, bs, self.hidden_size)
+        decoder_hidden = self.img_fvs_to_hs(img_fvs)
         use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
         langage_output = []
         if use_teacher_forcing:
