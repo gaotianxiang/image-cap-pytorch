@@ -1,5 +1,5 @@
 import torch
-from modules import ImageCaptioning, COCODatasetProducer, SparseCrossEntropy
+from modules import get_img_cap, COCODatasetProducer, SparseCrossEntropy
 import os
 from tqdm import tqdm, trange
 from utils.utils import RunningAverage
@@ -26,7 +26,7 @@ class Director:
 
         self.dataset_producer = COCODatasetProducer(hps.dtst_dir, hps.max_caption_length, hps.vocabulary_size)
 
-        self.net = ImageCaptioning(hps).to(self.device)
+        self.net = get_img_cap(hps).to(self.device)
         self.loss_function = SparseCrossEntropy()
 
     def train(self):
@@ -39,11 +39,17 @@ class Director:
         num_workers = self.hps.num_workers
         train_dtst = self.dataset_producer.prepare_train_data()
         ravg = RunningAverage()
-        optimizer = optim.Adam(params=[
-            {'params': self.net.language_decoder.parameters()},
-            {'params': self.net.img_fvs_to_hs.parameters()}
-        ], lr=lr)
-        schedular = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.3, threshold=1e-2, patience=3)
+        if self.hps.img_cap == 'vanilla':
+            optimizer = optim.Adam(params=[
+                {'params': self.net.language_decoder.parameters()},
+                {'params': self.net.img_fvs_to_hs.parameters()}
+            ], lr=lr)
+        elif self.hps.img_cap == 'attention':
+            optimizer = optim.Adam(params=self.net.language_decoder.parameters(), lr=lr)
+        else:
+            raise ValueError('the image captioning type is illegal')
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.3, threshold=1e-2, patience=3,
+                                                               verbose=True)
         dl = data.DataLoader(train_dtst, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                              drop_last=True)
         self.net.train()
@@ -68,6 +74,20 @@ class Director:
                     ravg.update(loss.item())
                     if global_step % log_every == 0:
                         log('epoch {} ite {} loss_average {:05.5f}'.format(epoch, global_step, ravg()))
+                    if global_step % save_every == 0:
+                        ckpt_path = os.path.join(self.ckpts_dir, 'ckpt_{}.pth.tar'.format(global_step))
+                        state_dict = {
+                            'net': self.net.state_dict(),
+                            'epoch': epoch,
+                            'loss': ravg(),
+                            'global_step': global_step
+                        }
+                        torch.save(state_dict, ckpt_path)
+                        delete_ckpt_path = os.path.join(self.ckpts_dir, 'ckpt_{}.pth.tar'.format(
+                            global_step - self.hps.num_ckpts_saved * save_every))
+                        if os.path.exists(delete_ckpt_path):
+                            os.remove(delete_ckpt_path)
+                        scheduler.step(ravg())
 
                     progress_bar.set_postfix(loss_avg='{:05.5f}'.format(ravg()))
                     progress_bar.update(batch_size)
@@ -80,20 +100,90 @@ class Director:
                     'global_step': global_step
                 }
                 torch.save(state_dict, os.path.join(self.ckpts_dir, 'best.pth.tar'))
-            schedular.step(ravg())
+            log('- epoch {} done loss {:05.5f}'.format(epoch, ravg()))
+            # scheduler.step(ravg())
+
+    def beam_search(self, img, vocabulary):
+        fvs = self.net.image_encoder(img)
+        decoder_hidden = self.net.img_fvs_to_hs(fvs)
+        decoder_input = torch.tensor([0] * 1, dtype=torch.long, device=self.device)
+        beam_size = self.hps.beam_size
+
+        beam_partial_sentences = [[list(), decoder_input, decoder_hidden, 0, 0]] * beam_size
+        for di in range(self.max_caption_length):
+            if di == 0:
+                decoder_output, decoder_hidden = self.net.language_decoder(decoder_input, decoder_hidden, fvs)
+                topv, topi = decoder_output.squeeze().topk(beam_size)
+
+                for k in range(beam_size):
+                    beam_partial_sentences = [
+                        [[topi[k].item()],
+                         topi[k].detach(),
+                         decoder_hidden,
+                         topv[k].item(),
+                         1 if vocabulary.words[topi[k].item()] == '.' else 0]
+                        for k in [0, 1, 2]
+                    ]
+                # print()
+            else:
+                for i in range(beam_size):
+                    if beam_partial_sentences[i][4] == 1:
+                        beam_partial_sentences.append(beam_partial_sentences[i])
+                        continue
+                    decoder_output, decoder_hidden = self.net.language_decoder(
+                        beam_partial_sentences[i][1],
+                        beam_partial_sentences[i][2],
+                        fvs
+                    )
+                    topv, topi = decoder_output.squeeze().topk(beam_size)
+                    local_beam_partial_sentences = [
+                        [beam_partial_sentences[i][0] + [topi[k].item()],
+                         topi[k].detach(),
+                         decoder_hidden,
+                         beam_partial_sentences[i][3] + topv[k].item(),
+                         1 if vocabulary.words[topi[k].item()] == '.' else 0]
+                        for k in range(beam_size)
+                    ]
+                    beam_partial_sentences += local_beam_partial_sentences
+                beam_partial_sentences = beam_partial_sentences[beam_size:]
+                beam_partial_sentences = sorted(beam_partial_sentences, key=lambda x: x[3], reverse=True)[
+                                         0:beam_size]
+        return beam_partial_sentences[0][0]
+
+    def greedy_search(self, img, vocabulary):
+        fvs = self.net.image_encoder(img)
+        decoder_hidden = self.net.img_fvs_to_hs(fvs)
+        decoder_input = torch.tensor([0] * 1, dtype=torch.long, device=self.device)
+        sentence = []
+        for di in range(self.hps.max_caption_length):
+            decoder_output, decoder_hidden = self.net.language_decoder(decoder_input, decoder_hidden, fvs)
+            topv, topi = decoder_output.topk(1)
+            if vocabulary.words[topi.item()] == '.':
+                break
+            else:
+                sentence.append(topi.item())
+                decoder_input = topi.detach()
+        return sentence
 
     def eval(self):
         set_logger(os.path.join(self.log_dir, 'eval.log'), terminal=False)
         log('- evaluating the model on coco dataset')
         eval_dtst = self.dataset_producer.prepare_eval_data()
-        eval_dl = data.DataLoader(eval_dtst, batch_size=1)
+        eval_dl = data.DataLoader(eval_dtst, batch_size=1, num_workers=self.hps.num_workers)
         eval_coco = eval_dtst.eval_coco
         vocabulary = eval_dtst.vocabulary
         results = []
+        beam_size = self.hps.beam_size
+        _, _, global_step = self.load_ckpts()
 
-        # _, _, global_step = self.load_ckpts()
-        self.load_ckpts()
-        caption_path = os.path.join(self.eval_dir, 'eval_caption.json')
+        if beam_size != 0:
+            log('- beam search, beam size is {}'.format(beam_size))
+            caption_path = os.path.join(self.eval_dir,
+                                        'eval_caption_globalstep_{}_beam_{}.json'.format(global_step, beam_size))
+        else:
+            log('- greedy search')
+            caption_path = os.path.join(self.eval_dir, 'eval_caption_globalstep_{}.json'.format(global_step))
+        log('- the caption will be stored in file {}'.format(caption_path))
         if os.path.exists(caption_path):
             log('- already generate captions')
             eval_result_coco = eval_coco.loadRes(caption_path)
@@ -107,19 +197,24 @@ class Director:
             with tqdm(total=len(eval_dl)) as progress_bar:
                 for id, img in eval_dl:
                     img = img.to(self.device)
-                    fvs = self.net.image_encoder(img)
-                    sentence = []
-                    decoder_input = torch.tensor([0] * 1, dtype=torch.long, device=self.device)
-                    decoder_hidden = fvs.view(1, 1, self.hidden_size)
+                    if beam_size > 0:
+                        sentence = self.beam_search(img, vocabulary)
+                    else:
+                        sentence = self.greedy_search(img, vocabulary)
+                    # fvs = self.net.image_encoder(img)
+                    # fvs = self.net.img_fvs_to_hs(fvs)
+                    # sentence = []
+                    # decoder_input = torch.tensor([0] * 1, dtype=torch.long, device=self.device)
+                    # decoder_hidden = fvs.view(1, 1, self.hidden_size)
 
-                    for _ in range(self.max_caption_length):
-                        decoder_output, decoder_hidden = self.net.language_decoder(decoder_input, decoder_hidden)
-                        topv, topi = decoder_output.topk(1)
-                        if vocabulary.words[topi.item()] == '.':
-                            break
-                        else:
-                            sentence.append(topi.item())
-                            decoder_input = topi.detach()
+                    # for di in range(self.hps.max_length):
+                    #     decoder_output, decoder_hidden = self.net.language_decoder(decoder_input, decoder_hidden)
+                    #     topv, topi = decoder_output.topk(1)
+                    #     if vocabulary.words[topi.item()] == '.':
+                    #         break
+                    #     else:
+                    #         sentence.append(topi.item())
+                    #         decoder_input = topi.detach()
                     caption = vocabulary.get_sentence(sentence)
                     results.append({'image_id': int(id),
                                     'caption': caption})

@@ -14,5 +14,6 @@
   "img_encoder": "vanilla",
   "language_decoder": "vanilla",
   "img_cap": "vanilla",
-  "num_ckpts_saved": 5
+  "num_ckpts_saved": 5,
+  "beam_size": 3
 }

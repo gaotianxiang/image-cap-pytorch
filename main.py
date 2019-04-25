@@ -18,6 +18,8 @@ def get_parameters():
         raise FileNotFoundError('there is no config json file')
     hps = Params(hps_path)
     args.__dict__.update(hps.dict)
+    if args.mode != 'train':
+        args.batch_size = 1
     return args
 
 
