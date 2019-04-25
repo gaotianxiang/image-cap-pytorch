@@ -124,7 +124,6 @@ class Director:
                          1 if vocabulary.words[topi[k].item()] == '.' else 0]
                         for k in [0, 1, 2]
                     ]
-                # print()
             else:
                 for i in range(beam_size):
                     if beam_partial_sentences[i][4] == 1:
@@ -201,20 +200,7 @@ class Director:
                         sentence = self.beam_search(img, vocabulary)
                     else:
                         sentence = self.greedy_search(img, vocabulary)
-                    # fvs = self.net.image_encoder(img)
-                    # fvs = self.net.img_fvs_to_hs(fvs)
-                    # sentence = []
-                    # decoder_input = torch.tensor([0] * 1, dtype=torch.long, device=self.device)
-                    # decoder_hidden = fvs.view(1, 1, self.hidden_size)
 
-                    # for di in range(self.hps.max_length):
-                    #     decoder_output, decoder_hidden = self.net.language_decoder(decoder_input, decoder_hidden)
-                    #     topv, topi = decoder_output.topk(1)
-                    #     if vocabulary.words[topi.item()] == '.':
-                    #         break
-                    #     else:
-                    #         sentence.append(topi.item())
-                    #         decoder_input = topi.detach()
                     caption = vocabulary.get_sentence(sentence)
                     results.append({'image_id': int(id),
                                     'caption': caption})
