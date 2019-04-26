@@ -77,7 +77,14 @@ def log_test():
     log(' in file test')
 
 
+def ccg_test():
+    from utils.ccg.ccg_supertagging import CCGSuperTagging
+    ccg = CCGSuperTagging()
+    ccg.get_ccg_supertags()
+
+
 if __name__ == '__main__':
     # dtst_test()
     # img_test()
-    log_test()
+    # log_test()
+    ccg_test()

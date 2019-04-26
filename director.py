@@ -225,6 +225,7 @@ class Director:
         test_dtst = self.dataset_producer.prepare_test_data(test_dir=test_dir)
         test_dl = data.DataLoader(test_dtst, batch_size=1)
         vocabulary = test_dtst.vocabulary
+        beam_size = self.hps.beam_size
 
         inv_trans = transforms.Compose([
             transforms.Normalize(mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
@@ -238,19 +239,23 @@ class Director:
             with tqdm(total=len(test_dl)) as progress_bar:
                 for i, img in enumerate(test_dl):
                     img = img.to(self.device)
-                    fvs = self.net.image_encoder(img)
-                    sentence = []
-                    decoder_input = torch.tensor([0] * 1, dtype=torch.long, device=self.device)
-                    decoder_hidden = fvs.view(1, 1, self.hidden_size)
-
-                    for _ in range(self.max_caption_length):
-                        decoder_output, decoder_hidden = self.net.language_decoder(decoder_input, decoder_hidden)
-                        topv, topi = decoder_output.topk(1)
-                        if vocabulary.words[topi.item()] == '.':
-                            break
-                        else:
-                            sentence.append(topi.item())
-                            decoder_input = topi.detach()
+                    if beam_size > 0:
+                        sentence = self.beam_search(img, vocabulary)
+                    else:
+                        sentence = self.greedy_search(img, vocabulary)
+                    # fvs = self.net.image_encoder(img)
+                    # sentence = []
+                    # decoder_input = torch.tensor([0] * 1, dtype=torch.long, device=self.device)
+                    # decoder_hidden = fvs.view(1, 1, self.hidden_size)
+                    #
+                    # for _ in range(self.max_caption_length):
+                    #     decoder_output, decoder_hidden = self.net.language_decoder(decoder_input, decoder_hidden)
+                    #     topv, topi = decoder_output.topk(1)
+                    #     if vocabulary.words[topi.item()] == '.':
+                    #         break
+                    #     else:
+                    #         sentence.append(topi.item())
+                    #         decoder_input = topi.detach()
                     caption = vocabulary.get_sentence(sentence)
                     img = img.to('cpu')
                     img = inv_trans(img[0])
