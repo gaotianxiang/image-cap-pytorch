@@ -87,7 +87,6 @@ class Director:
                             global_step - self.hps.num_ckpts_saved * save_every))
                         if os.path.exists(delete_ckpt_path):
                             os.remove(delete_ckpt_path)
-                        scheduler.step(ravg())
 
                     progress_bar.set_postfix(loss_avg='{:05.5f}'.format(ravg()))
                     progress_bar.update(batch_size)
@@ -101,7 +100,7 @@ class Director:
                 }
                 torch.save(state_dict, os.path.join(self.ckpts_dir, 'best.pth.tar'))
             log('- epoch {} done loss {:05.5f}'.format(epoch, ravg()))
-            # scheduler.step(ravg())
+            scheduler.step(ravg())
 
     def beam_search(self, img, vocabulary):
         fvs = self.net.image_encoder(img)
